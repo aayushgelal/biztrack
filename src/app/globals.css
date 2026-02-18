@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #F2F2F7;
+  --ios-blue: #007AFF;
+  --ios-gray: #8E8E93;
+}
+
+body {
+  background-color: var(--background);
+  color: #000;
+  font-family: 'Outfit', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.ios-card {
+  @apply bg-white rounded-[24px] shadow-sm border border-black/5 active:scale-[0.98] transition-transform duration-200;
+}
+
+.ios-title {
+  @apply text-3xl font-extrabold tracking-tight text-black;
+}
+
+.bottom-nav-blur {
+  @apply bg-white/80 backdrop-blur-2xl border-t border-gray-200;
+}
