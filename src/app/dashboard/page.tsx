@@ -152,6 +152,7 @@ export default function DashboardPage() {
       <AnimatePresence>
         {isModalOpen && (
           <AddRecordModal 
+            isOpen={isModalOpen}
             userId={user.id} 
             onClose={() => setIsModalOpen(false)} 
             onSuccess={() => {
