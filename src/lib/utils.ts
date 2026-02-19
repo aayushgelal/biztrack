@@ -15,7 +15,7 @@ export function cn(...inputs: ClassValue[]) {
  */
 export function formatCurrency(
   amount: number,
-  currency = "रू",
+  currency = "NPR",
   locale = "en-NP"
 ): string {
   return new Intl.NumberFormat(locale, {

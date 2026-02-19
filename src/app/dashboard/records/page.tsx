@@ -3,42 +3,30 @@
 import { useEffect, useState, useCallback } from "react";
 import { 
   ClipboardList, Plus, Search, Filter, Cpu, 
-  Trash2, ChevronLeft, ChevronRight, X 
+  ChevronLeft, ChevronRight, Calendar,
+  ArrowUpRight, SlidersHorizontal, RotateCcw
 } from "lucide-react";
-import { AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import AddRecordModal from "@/components/ui/AddRecordModal";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
-import { EARNING_CATEGORIES } from "@/types";
 import toast from "react-hot-toast";
 
-interface Record {
-  id: string;
-  amount: number;
-  category: string;
-  description?: string | null;
-  source: string;
-  recordedAt: string;
-  device?: { id: string; name: string } | null;
-}
-
 export default function RecordsPage() {
-  const [records, setRecords] = useState<Record[]>([]);
-  const [devices, setDevices] = useState<{id: string, name: string}[]>([]);
+  const [records, setRecords] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  
+  // Single date filter
   const [filters, setFilters] = useState({
-    category: "",
-    source: "",
-    deviceId: "",
-    from: "",
-    to: "",
+    category: "", 
+    date: "", // The specific day selected
     search: "",
   });
 
-  const LIMIT = 20;
+  const LIMIT = 15;
   const totalPages = Math.ceil(total / LIMIT);
 
   const fetchRecords = useCallback(async () => {
@@ -47,160 +35,173 @@ export default function RecordsPage() {
       const params = new URLSearchParams({
         page: page.toString(),
         limit: LIMIT.toString(),
+        ...(filters.search && { search: filters.search }),
         ...(filters.category && { category: filters.category }),
-        ...(filters.source && { source: filters.source }),
-        ...(filters.deviceId && { deviceId: filters.deviceId }),
-        ...(filters.from && { from: new Date(filters.from).toISOString() }),
-        ...(filters.to && { to: new Date(filters.to + "T23:59:59").toISOString() }),
       });
 
-      const [recRes, subRes] = await Promise.all([
-        fetch(`/api/records?${params}`),
-        fetch("/api/subscription"),
-      ]);
-
-      const recData = await recRes.json();
-      const subData = await subRes.json();
-
-      setRecords(recData.records || []);
-      setTotal(recData.total || 0);
-      if (subData.subscriptions) {
-        setDevices(subData.subscriptions.map((s: any) => s.device));
+      // Logic: If a single date is picked, send 'from' and 'to' as start/end of that day
+      if (filters.date) {
+        params.append("from", new Date(filters.date + "T00:00:00").toISOString());
+        params.append("to", new Date(filters.date + "T23:59:59").toISOString());
       }
+      
+      const res = await fetch(`/api/records?${params}`);
+      const data = await res.json();
+      setRecords(data.records || []);
+      setTotal(data.total || 0);
     } catch (err) {
-      console.error(err);
-      toast.error("Failed to load records");
+      toast.error("Sync failed");
     } finally {
       setLoading(false);
     }
-  }, [page, filters]);
+  }, [page, filters.search, filters.category, filters.date]);
 
-  useEffect(() => {
-    fetchRecords();
-  }, [fetchRecords]);
+  useEffect(() => { fetchRecords(); }, [fetchRecords]);
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Delete this record?")) return;
-    try {
-      const res = await fetch(`/api/earnings?id=${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error();
-      toast.success("Record deleted");
-      fetchRecords();
-    } catch {
-      toast.error("Failed to delete");
-    }
+  const resetFilters = () => {
+    setFilters({ category: "", date: "", search: "" });
+    setPage(1);
   };
 
-  const hasFilters = Object.values(filters).some(v => v !== "");
-
   return (
-    <div className="space-y-5 pb-24">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Records</h1>
-          <p className="text-surface-500 text-sm">{total.toLocaleString()} total</p>
-        </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-xl flex items-center gap-2 transition-all active:scale-95"
-        >
-          <Plus size={18} />
-          <span className="font-semibold text-sm">Add Record</span>
-        </button>
-      </div>
-
-      {/* Search & Filter Trigger */}
-      <div className="flex gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
-          <input
-            type="text"
-            placeholder="Search records..."
-            value={filters.search}
-            onChange={(e) => setFilters(f => ({ ...f, search: e.target.value }))}
-            className="w-full bg-surface-800 border border-surface-700 rounded-xl py-2.5 pl-10 pr-4 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
-          />
-        </div>
-        <button
-          onClick={() => setShowFilters(!showFilters)}
-          className={cn(
-            "p-2.5 rounded-xl border transition-all flex items-center gap-2",
-            hasFilters ? "bg-brand-500/10 border-brand-500 text-brand-500" : "bg-surface-800 border-surface-700 text-surface-400"
-          )}
-        >
-          <Filter size={20} />
-        </button>
-      </div>
-
-      {/* Table / List View */}
-      <div className="bg-surface-900 border border-surface-800 rounded-2xl overflow-hidden">
-        {loading ? (
-          <div className="p-8 space-y-4">
-            {[1, 2, 3].map(i => <div key={i} className="h-16 bg-surface-800 animate-pulse rounded-xl" />)}
+    <div className="min-h-screen bg-[#F2F2F7] pb-32">
+      {/* 1. Glassmorphism Header */}
+      <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-gray-100 px-6 pt-14 pb-6">
+        <div className="flex items-end justify-between">
+          <div>
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1">Accounting</p>
+            <h1 className="text-3xl font-black text-black tracking-tighter">Records</h1>
           </div>
-        ) : records.length === 0 ? (
-          <div className="py-20 text-center">
-            <ClipboardList className="mx-auto text-surface-700 mb-4" size={48} />
-            <p className="text-surface-500">No records found</p>
+          <button
+            onClick={() => setShowModal(true)}
+            className="w-12 h-12 bg-[#007AFF] text-white rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200 active:scale-90 transition-transform"
+          >
+            <Plus size={24} />
+          </button>
+        </div>
+
+        <div className="flex gap-2 mt-6">
+          <div className="relative flex-1 group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-[#007AFF] transition-colors" />
+            <input
+              type="text"
+              placeholder="Search description..."
+              value={filters.search}
+              onChange={(e) => { setFilters(f => ({ ...f, search: e.target.value })); setPage(1); }}
+              className="w-full bg-[#F2F2F7] border-none rounded-2xl py-3.5 pl-11 pr-4 text-sm font-bold focus:ring-2 focus:ring-[#007AFF]/20 transition-all"
+            />
           </div>
-        ) : (
-          <div className="divide-y divide-surface-800">
-            {records.map((record) => (
-              <div key={record.id} className="p-4 flex items-center justify-between hover:bg-surface-800/50 transition-colors">
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold uppercase tracking-wider text-brand-400 bg-brand-500/10 px-2 py-0.5 rounded">
-                      {record.category}
-                    </span>
-                    {record.source === "device" && <Cpu size={14} className="text-purple-400" />}
-                  </div>
-                  <p className="text-white font-medium">{record.description || "Manual Entry"}</p>
-                  <p className="text-xs text-surface-500">{formatDate(record.recordedAt, "MMM d, h:mm a")}</p>
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={cn(
+              "p-3.5 rounded-2xl border transition-all active:scale-90",
+              showFilters ? "bg-black text-white border-black" : "bg-white border-gray-100 text-gray-400 shadow-sm"
+            )}
+          >
+            <SlidersHorizontal size={20} />
+          </button>
+        </div>
+      </header>
+
+      <main className="max-w-xl mx-auto px-6 mt-6 space-y-4">
+        {/* 2. Simplified Single Date Filter Drawer */}
+        <AnimatePresence>
+          {showFilters && (
+            <motion.div 
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden bg-white rounded-[32px] border border-gray-100 shadow-sm"
+            >
+              <div className="p-6 space-y-5">
+                <div className="flex justify-between items-center px-1">
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Filter by Day</span>
+                    <button onClick={resetFilters} className="text-[10px] font-black text-[#007AFF] uppercase flex items-center gap-1">
+                      <RotateCcw size={12} /> Reset
+                    </button>
                 </div>
-                <div className="flex items-center gap-4">
-                  <span className="text-lg font-bold text-emerald-400">+{formatCurrency(record.amount)}</span>
-                  <button onClick={() => handleDelete(record.id)} className="text-surface-600 hover:text-red-500 transition-colors p-1">
-                    <Trash2 size={18} />
-                  </button>
+
+                <div className="space-y-4">
+                  <div className="relative">
+                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <input 
+                      type="date" 
+                      className="w-full bg-[#F2F2F7] border-none rounded-2xl py-4 pl-12 pr-4 text-sm font-bold"
+                      value={filters.date}
+                      onChange={(e) => { setFilters({...filters, date: e.target.value}); setPage(1); }}
+                    />
+                  </div>
+
+                  <select 
+                    className="w-full bg-[#F2F2F7] border-none rounded-2xl py-4 px-5 text-sm font-bold appearance-none"
+                    value={filters.category}
+                    onChange={(e) => { setFilters({...filters, category: e.target.value}); setPage(1); }}
+                  >
+                    <option value="">All Categories</option>
+                    <option value="Sales">Sales</option>
+                    <option value="Service">Services</option>
+                  </select>
                 </div>
               </div>
-            ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* 3. Daily Summary Banner (Dynamic) */}
+        {filters.date && records.length > 0 && (
+          <div className="bg-[#007AFF] p-6 rounded-[32px] text-white shadow-xl shadow-blue-100">
+            <p className="text-[10px] font-black uppercase tracking-widest opacity-60">Revenue for {formatDate(filters.date, "MMMM d, yyyy")}</p>
+            <p className="text-3xl font-black tracking-tighter mt-1">
+              {formatCurrency(records.reduce((acc, curr) => acc + curr.amount, 0))}
+            </p>
           </div>
         )}
-      </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <button 
-            disabled={page === 1} 
-            onClick={() => setPage(p => p - 1)}
-            className="p-2 bg-surface-800 rounded-lg disabled:opacity-30"
-          >
-            <ChevronLeft />
-          </button>
-          <span className="text-sm text-surface-500">Page {page} of {totalPages}</span>
-          <button 
-            disabled={page === totalPages} 
-            onClick={() => setPage(p => p + 1)}
-            className="p-2 bg-surface-800 rounded-lg disabled:opacity-30"
-          >
-            <ChevronRight />
-          </button>
+        {/* 4. List of Records */}
+        <div className="space-y-3">
+          {loading ? (
+             [1, 2, 3].map(i => <div key={i} className="h-24 bg-white rounded-[32px] animate-pulse" />)
+          ) : records.length === 0 ? (
+            <div className="py-20 text-center space-y-4">
+              <div className="w-20 h-20 bg-gray-50 rounded-[30px] flex items-center justify-center mx-auto text-gray-300">
+                <ClipboardList size={32} />
+              </div>
+              <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">No Sales Recorded</p>
+            </div>
+          ) : (
+            records.map((record, idx) => (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                key={record.id}
+                className="bg-white p-5 rounded-[32px] shadow-sm border border-gray-50 flex items-center justify-between active:scale-[0.98] transition-all"
+              >
+                <div className="flex items-center gap-4">
+                  <div className={cn(
+                    "w-12 h-12 rounded-2xl flex items-center justify-center",
+                    record.source === "device" ? "bg-purple-50 text-purple-500" : "bg-blue-50 text-blue-500"
+                  )}>
+                    {record.source === "device" ? <Cpu size={22} /> : <ArrowUpRight size={22} />}
+                  </div>
+                  <div>
+                    <p className="font-black text-black text-sm tracking-tight">{record.description || "POS Payment"}</p>
+                    <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mt-0.5">{formatDate(record.recordedAt, "h:mm a")} • {record.category}</p>
+                  </div>
+                </div>
+                <p className="text-lg font-black text-emerald-500 tracking-tighter">+{formatCurrency(record.amount)}</p>
+              </motion.div>
+            ))
+          )}
         </div>
-      )}
+      </main>
 
-      {/* MODAL: Fixed with AnimatePresence and Conditional Rendering */}
+      {/* Modal Integration */}
       <AnimatePresence>
         {showModal && (
           <AddRecordModal
             isOpen={showModal}
             onClose={() => setShowModal(false)}
-            onSuccess={() => {
-              setShowModal(false);
-              fetchRecords();
-            }}
+            onSuccess={() => { setShowModal(false); fetchRecords(); }}
           />
         )}
       </AnimatePresence>
