@@ -126,7 +126,7 @@ export default function SettingsPage() {
 
           {user?.devices?.map((device: any) => {
             // Per-device logic
-            const devSub = device.subscriptions?.[0] || device.subscription;
+            const devSub = device.subscription;
             const devDaysLeft = devSub ? Math.ceil((new Date(devSub.endDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) : 0;
             
             return (
