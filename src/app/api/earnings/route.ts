@@ -138,47 +138,30 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ error: "Invalid type" }, { status: 400 });
 }
 
-// POST /api/earnings — create a new earning record
+// POST /api/earnings
 export async function POST(req: NextRequest) {
   const session = await getSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
     const body = await req.json();
-    const { amount, description, category, deviceId, recordedAt,prn} = body;
-
-    if (!amount || isNaN(parseFloat(amount))) {
-      return NextResponse.json({ error: "Valid amount is required" }, { status: 400 });
-    }
-
-    if (deviceId) {
-      const device = await prisma.device.findFirst({
-        where: { id: deviceId, userId: session.userId },
-      });
-      if (!device) {
-        return NextResponse.json({ error: "Device not found" }, { status: 404 });
-      }
-    }
+    const { amount, description, paymentMethod, recordedAt, prn } = body;
 
     const record = await prisma.earningRecord.create({
       data: {
         amount: parseFloat(amount),
         description: description || null,
-        category: category || "Sales",
-        source: "manual",
+        // SAVE THE PAYMENT METHOD HERE
+        paymentMethod: paymentMethod || "CASH", 
+        source: "app",
         recordedAt: recordedAt ? new Date(recordedAt) : new Date(),
         userId: session.userId,
-        deviceId: deviceId || null,
-        prn:prn
+        prn: prn || null
       },
-      include: { device: { select: { name: true } } },
     });
 
     return NextResponse.json({ record }, { status: 201 });
   } catch (error) {
-    console.error("Create record error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

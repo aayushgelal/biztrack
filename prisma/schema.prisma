@@ -25,6 +25,8 @@ model User {
   devices       Device[]
   records       EarningRecord[]
   subscriptions Subscription[]
+  credits       Credit[]
+
 }
 
 model Device {
@@ -49,16 +51,19 @@ model Device {
   records      EarningRecord[]
   subscription Subscription?
 }
-
 model EarningRecord {
   id          String   @id @default(cuid())
-  amount      Float    // Always stored in the smallest unit or as decimal
+  amount      Float
   currency    String   @default("NPR")
-  description String?
+  description String?  // This serves as your "Remarks" - User can edit this
   category    String   @default("Sales")
-  status      String   @default("SUCCESS") // SUCCESS | FAILED | PENDING
-  prn         String   @unique             // Fonepay's unique transaction reference
-  source      String   @default("device")  // device | manual
+  status      String   @default("SUCCESS")
+  prn         String?  @unique // Nullable now, as Cash/Manual won't have a PRN
+  
+  // New Fields
+  paymentMethod String   @default("HARDWARE") // HARDWARE | CASH | CREDIT
+  source        String   @default("device")   // device | app
+  
   recordedAt  DateTime @default(now())
   createdAt   DateTime @default(now())
 
@@ -66,6 +71,25 @@ model EarningRecord {
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   deviceId    String?
   device      Device?  @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  
+  // Relation to Credit if this was a credit payment/settlement
+  creditId    String?
+  credit      Credit?  @relation(fields: [creditId], references: [id])
+}
+
+model Credit {
+  id          String   @id @default(cuid())
+  customerName String
+  customerPhone String?
+  totalAmount  Float    @default(0) // Total currently owed
+  status       String   @default("PENDING") // PENDING | SETTLED
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  records     EarningRecord[] // History of credits and partial payments
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model Subscription {

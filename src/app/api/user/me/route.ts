@@ -32,14 +32,16 @@ export async function GET(req: NextRequest) {
             name: true,
             serialNumber: true,
             fonepayMerchantCode: true,
-            fonepayUsername: true,
-            fonepayPassword: true,
             fonepaySecretKey: true,
-            subscription: {
+            // CHANGE THIS: Ensure it matches your schema (likely 'subscriptions' plural)
+            // and returns an array so the frontend .[0] works.
+            subscriptions: { 
               select: {
                 status: true,
                 endDate: true,
-              }
+              },
+              take: 1,
+              orderBy: { endDate: 'desc' }
             }
           }
         }

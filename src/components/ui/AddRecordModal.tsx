@@ -1,33 +1,21 @@
 "use client";
-
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { X, CheckCircle2 } from "lucide-react";
+import { X, CheckCircle2, Wallet, Users, Globe } from "lucide-react";
 import toast from "react-hot-toast";
+import { cn } from "@/lib/utils";
 
-interface Props {
-  isOpen: boolean;
-  onClose: () => void;
-  onSuccess: () => void;
-  userId?: string;
-}
-
-export default function AddRecordModal({ isOpen, userId, onClose, onSuccess }: Props) {
+export default function AddRecordModal({ isOpen, userId, onClose, onSuccess }: any) {
   const [amount, setAmount] = useState("");
   const [desc, setDesc] = useState("");
+  const [method, setMethod] = useState("CASH"); // CASH | CREDIT | HARDWARE
   const [loading, setLoading] = useState(false);
 
-  // Safety guard: If not open, render nothing
   if (!isOpen) return null;
 
   async function save() {
-    if (!amount || parseFloat(amount) <= 0) return toast.error("Enter a valid amount");
+    if (!amount || parseFloat(amount) <= 0) return toast.error("Enter amount");
     setLoading(true);
-
-    const now = new Date();
-    const timestamp = now.toISOString().replace(/[-:T]/g, "").split(".")[0]; 
-    const generatedPrn = `MAN-${timestamp}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
-    
     try {
       const res = await fetch("/api/earnings", {
         method: "POST",
@@ -35,95 +23,89 @@ export default function AddRecordModal({ isOpen, userId, onClose, onSuccess }: P
         body: JSON.stringify({ 
           userId, 
           amount: parseFloat(amount), 
-          description: desc || "Manual Entry", 
-          source: "manual",
-          prn: generatedPrn,
-          recordedAt: now.toISOString()
+          description: desc || `${method} Entry`, 
+          source: "app",
+          paymentMethod: method,
+          recordedAt: new Date().toISOString()
         }),
       });
-
       if (res.ok) {
-        toast.success("Record Saved");
+        toast.success("Saved");
         onSuccess();
-      } else {
-        const errData = await res.json();
-        toast.error(errData.error || "Save failed");
       }
     } catch (err) {
-      toast.error("Connection error");
+      toast.error("Error");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4">
-      {/* Backdrop */}
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
       <motion.div 
-        initial={{ opacity: 0 }} 
-        animate={{ opacity: 1 }} 
-        exit={{ opacity: 0 }} 
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} 
         onClick={onClose} 
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm" 
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm" 
       />
-
-      {/* Sheet */}
       <motion.div 
-        initial={{ y: "100%" }} 
-        animate={{ y: 0 }} 
-        exit={{ y: "100%" }} 
-        transition={{ type: "spring", damping: 25, stiffness: 200 }}
-        className="relative w-full max-w-lg bg-white rounded-t-[40px] sm:rounded-[32px] p-8 pb-12 shadow-2xl"
+        initial={{ scale: 0.9, opacity: 0 }} 
+        animate={{ scale: 1, opacity: 1 }}
+        className="relative w-full max-w-sm bg-white rounded-[32px] p-6 shadow-2xl"
       >
-        <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-8 sm:hidden" />
-        
-        <div className="flex justify-between items-center mb-8">
-          <h2 className="text-3xl font-black text-black tracking-tight">New Sale</h2>
-          <button 
-            onClick={onClose} 
-            className="bg-gray-100 p-2 rounded-full text-gray-500 hover:text-black transition-colors"
-          >
-            <X size={20} />
-          </button>
+        <div className="flex justify-between items-center mb-5">
+          <h2 className="text-xl font-black text-black tracking-tight">Add Record</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-black"><X size={20} /></button>
         </div>
 
-        <div className="space-y-6">
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-gray-400 uppercase ml-4">Amount</label>
+        <div className="space-y-4">
+          {/* Smaller, 3-way Toggle */}
+          <div className="flex gap-2 p-1 bg-gray-100 rounded-2xl">
+            {[
+              { id: "CASH", label: "cash", icon: Wallet, color: "text-emerald-500" },
+              { id: "HARDWARE", label: "online", icon: Globe, color: "text-blue-500" },
+              { id: "CREDIT", label: "credit", icon: Users, color: "text-red-500" }
+            ].map((m) => (
+              <button
+                key={m.id}
+                onClick={() => setMethod(m.id)}
+                className={cn(
+                  "flex-1 py-2 rounded-xl flex flex-col items-center gap-1 transition-all",
+                  method === m.id ? "bg-white shadow-sm scale-100" : "opacity-50 scale-95"
+                )}
+              >
+                <m.icon size={16} className={m.color} />
+                <span className="text-[10px] font-black uppercase tracking-tighter text-black">{m.label}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-gray-400 uppercase ml-2">Amount</label>
             <input 
               type="number" 
-              autoFocus 
-              placeholder="0.00 रू" 
-              className="w-full bg-[#F2F2F7] rounded-[24px] py-6 px-8 text-4xl font-black text-black border-none focus:ring-4 focus:ring-blue-100 transition-all outline-none" 
+              placeholder="0.00" 
+              className="w-full bg-[#F2F2F7] rounded-2xl py-4 px-6 text-2xl font-black text-black outline-none focus:ring-2 focus:ring-blue-500/10" 
               value={amount} 
               onChange={e => setAmount(e.target.value)} 
             />
           </div>
 
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-gray-400 uppercase ml-4">Note (Optional)</label>
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-gray-400 uppercase ml-2">Remarks</label>
             <input 
               type="text" 
-              placeholder="What was this for?" 
-              className="w-full bg-[#F2F2F7] rounded-[20px] py-4 px-8 text-lg font-bold text-black border-none outline-none focus:ring-4 focus:ring-blue-500/10" 
+              placeholder="Optional note..." 
+              className="w-full bg-[#F2F2F7] rounded-xl py-3 px-5 text-sm font-bold outline-none" 
               value={desc} 
               onChange={e => setDesc(e.target.value)} 
             />
           </div>
 
           <button 
-            onClick={save} 
-            disabled={loading} 
-            className="w-full bg-[#007AFF] text-white py-5 rounded-[24px] font-black text-xl shadow-lg shadow-blue-500/30 active:scale-95 disabled:opacity-50 disabled:active:scale-100 transition-all flex items-center justify-center gap-3 mt-4"
+            onClick={save} disabled={loading} 
+            className="w-full bg-black text-white py-4 rounded-2xl font-black text-sm active:scale-95 transition-all flex items-center justify-center gap-2 mt-2"
           >
-            {loading ? (
-              <span className="flex items-center gap-2">
-                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Processing...
-              </span>
-            ) : (
-              <><CheckCircle2 size={24} /> Record Sale</>
-            )}
+            {loading ? "Saving..." : <><CheckCircle2 size={18} /> Confirm Entry</>}
           </button>
         </div>
       </motion.div>

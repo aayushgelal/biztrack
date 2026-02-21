@@ -1,208 +1,225 @@
 "use client";
-
-import { useEffect, useState, useCallback } from "react";
-import { 
-  ClipboardList, Plus, Search, Filter, Cpu, 
-  ChevronLeft, ChevronRight, Calendar,
-  ArrowUpRight, SlidersHorizontal, RotateCcw
-} from "lucide-react";
-import { AnimatePresence, motion } from "framer-motion";
-import AddRecordModal from "@/components/ui/AddRecordModal";
-import { formatCurrency, formatDate, cn } from "@/lib/utils";
+import { useEffect, useRef, useState } from "react";
+import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { motion, AnimatePresence } from "framer-motion";
+import { Globe, Wallet, Users, Clock, CheckCircle2, AlertCircle, RefreshCcw, SearchX } from "lucide-react";
+import { formatDate, cn } from "@/lib/utils";
+import { settleCreditRecord } from "@/lib/actions";
 import toast from "react-hot-toast";
 
 export default function RecordsPage() {
-  const [records, setRecords] = useState<any[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
-  
-  // Single date filter
-  const [filters, setFilters] = useState({
-    category: "", 
-    date: "", // The specific day selected
-    search: "",
+  const queryClient = useQueryClient();
+  const [filter, setFilter] = useState("all");
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+
+  // 1. REACT QUERY: Infinite Scroll with Robust Safety
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    status,
+    refetch,
+    isFetching
+  } = useInfiniteQuery({
+    queryKey: ["ledger-records", filter],
+    queryFn: async ({ pageParam = 1 }) => {
+      const res = await fetch(`/api/records?type=${filter}&page=${pageParam}`);
+      if (!res.ok) throw new Error("Failed to fetch ledger");
+      return res.json();
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => (lastPage?.hasMore ? lastPage.page + 1 : undefined),
+    staleTime: Infinity, 
+    gcTime: 1000 * 60 * 60,
+    refetchOnWindowFocus: false,
   });
 
-  const LIMIT = 15;
-  const totalPages = Math.ceil(total / LIMIT);
+  // 2. SETTLEMENT MUTATION
+  const mutation = useMutation({
+    mutationFn: settleCreditRecord,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ledger-records"] });
+      // Also update dashboard totals if they share the cache
+      queryClient.invalidateQueries({ queryKey: ["today-dashboard"] }); 
+      toast.success("Settled Successfully");
+      setConfirmId(null);
+    },
+    onError: () => toast.error("Settlement failed")
+  });
 
-  const fetchRecords = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: LIMIT.toString(),
-        ...(filters.search && { search: filters.search }),
-        ...(filters.category && { category: filters.category }),
-      });
+  // 3. INFINITE SCROLL OBSERVER
+  const observerElem = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!hasNextPage || isFetchingNextPage) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) fetchNextPage();
+      },
+      { threshold: 0.1 }
+    );
+    if (observerElem.current) observer.observe(observerElem.current);
+    return () => observer.disconnect();
+  }, [hasNextPage, fetchNextPage, isFetchingNextPage]);
 
-      // Logic: If a single date is picked, send 'from' and 'to' as start/end of that day
-      if (filters.date) {
-        params.append("from", new Date(filters.date + "T00:00:00").toISOString());
-        params.append("to", new Date(filters.date + "T23:59:59").toISOString());
-      }
-      
-      const res = await fetch(`/api/records?${params}`);
-      const data = await res.json();
-      setRecords(data.records || []);
-      setTotal(data.total || 0);
-    } catch (err) {
-      toast.error("Sync failed");
-    } finally {
-      setLoading(false);
-    }
-  }, [page, filters.search, filters.category, filters.date]);
-
-  useEffect(() => { fetchRecords(); }, [fetchRecords]);
-
-  const resetFilters = () => {
-    setFilters({ category: "", date: "", search: "" });
-    setPage(1);
-  };
+  // SAFE DATA EXTRACTION: Prevents "Cannot read properties of undefined"
+  const allRecords = data?.pages?.flatMap((page) => page?.records ?? []) ?? [];
 
   return (
     <div className="min-h-screen bg-[#F2F2F7] pb-32">
-      {/* 1. Glassmorphism Header */}
-      <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-gray-100 px-6 pt-14 pb-6">
-        <div className="flex items-end justify-between">
+      {/* 1. STICKY GLASS HEADER */}
+      <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-gray-100 px-6 pt-12 pb-5">
+        <div className="flex justify-between items-center mb-5">
           <div>
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1">Accounting</p>
-            <h1 className="text-3xl font-black text-black tracking-tighter">Records</h1>
+            <h1 className="text-xl font-black text-black tracking-tighter">Business Ledger</h1>
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Transaction History</p>
           </div>
-          <button
-            onClick={() => setShowModal(true)}
-            className="w-12 h-12 bg-[#007AFF] text-white rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200 active:scale-90 transition-transform"
-          >
-            <Plus size={24} />
-          </button>
-        </div>
-
-        <div className="flex gap-2 mt-6">
-          <div className="relative flex-1 group">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-[#007AFF] transition-colors" />
-            <input
-              type="text"
-              placeholder="Search description..."
-              value={filters.search}
-              onChange={(e) => { setFilters(f => ({ ...f, search: e.target.value })); setPage(1); }}
-              className="w-full bg-[#F2F2F7] border-none rounded-2xl py-3.5 pl-11 pr-4 text-sm font-bold focus:ring-2 focus:ring-[#007AFF]/20 transition-all"
-            />
-          </div>
-          <button
-            onClick={() => setShowFilters(!showFilters)}
+          <button 
+            onClick={() => refetch()} 
+            disabled={isFetching}
             className={cn(
-              "p-3.5 rounded-2xl border transition-all active:scale-90",
-              showFilters ? "bg-black text-white border-black" : "bg-white border-gray-100 text-gray-400 shadow-sm"
+                "p-2.5 rounded-full bg-white shadow-sm border border-gray-100 transition-all active:scale-90",
+                isFetching ? "text-blue-500" : "text-gray-400"
             )}
           >
-            <SlidersHorizontal size={20} />
+            <RefreshCcw size={18} className={cn(isFetching && "animate-spin")} />
           </button>
+        </div>
+        
+        {/* COMPACT PILL FILTERS */}
+        <div className="grid grid-cols-4 gap-1.5 p-1 bg-gray-100/50 rounded-2xl border border-gray-100/50">
+          {["all", "online", "cash", "credit"].map((t) => (
+            <button
+              key={t}
+              onClick={() => setFilter(t)}
+              className={cn(
+                "py-2.5 rounded-xl text-[10px] font-black transition-all uppercase tracking-tighter",
+                filter === t 
+                    ? "bg-[#007AFF] text-white shadow-lg shadow-blue-200 scale-100" 
+                    : "text-gray-400 hover:text-gray-600 scale-95"
+              )}
+            >
+              {t === "online" ? "Digital" : t}
+            </button>
+          ))}
         </div>
       </header>
 
-      <main className="max-w-xl mx-auto px-6 mt-6 space-y-4">
-        {/* 2. Simplified Single Date Filter Drawer */}
-        <AnimatePresence>
-          {showFilters && (
-            <motion.div 
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden bg-white rounded-[32px] border border-gray-100 shadow-sm"
-            >
-              <div className="p-6 space-y-5">
-                <div className="flex justify-between items-center px-1">
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Filter by Day</span>
-                    <button onClick={resetFilters} className="text-[10px] font-black text-[#007AFF] uppercase flex items-center gap-1">
-                      <RotateCcw size={12} /> Reset
-                    </button>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="relative">
-                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-                    <input 
-                      type="date" 
-                      className="w-full bg-[#F2F2F7] border-none rounded-2xl py-4 pl-12 pr-4 text-sm font-bold"
-                      value={filters.date}
-                      onChange={(e) => { setFilters({...filters, date: e.target.value}); setPage(1); }}
-                    />
-                  </div>
-
-                  <select 
-                    className="w-full bg-[#F2F2F7] border-none rounded-2xl py-4 px-5 text-sm font-bold appearance-none"
-                    value={filters.category}
-                    onChange={(e) => { setFilters({...filters, category: e.target.value}); setPage(1); }}
-                  >
-                    <option value="">All Categories</option>
-                    <option value="Sales">Sales</option>
-                    <option value="Service">Services</option>
-                  </select>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* 3. Daily Summary Banner (Dynamic) */}
-        {filters.date && records.length > 0 && (
-          <div className="bg-[#007AFF] p-6 rounded-[32px] text-white shadow-xl shadow-blue-100">
-            <p className="text-[10px] font-black uppercase tracking-widest opacity-60">Revenue for {formatDate(filters.date, "MMMM d, yyyy")}</p>
-            <p className="text-3xl font-black tracking-tighter mt-1">
-              {formatCurrency(records.reduce((acc, curr) => acc + curr.amount, 0))}
-            </p>
+      {/* 2. ACTIVITY LIST */}
+      <main className="px-5 mt-6 space-y-2.5">
+        {status === "pending" ? (
+          <div className="py-20 flex flex-col items-center justify-center gap-3">
+             <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Syncing Records...</p>
           </div>
-        )}
-
-        {/* 4. List of Records */}
-        <div className="space-y-3">
-          {loading ? (
-             [1, 2, 3].map(i => <div key={i} className="h-24 bg-white rounded-[32px] animate-pulse" />)
-          ) : records.length === 0 ? (
-            <div className="py-20 text-center space-y-4">
-              <div className="w-20 h-20 bg-gray-50 rounded-[30px] flex items-center justify-center mx-auto text-gray-300">
-                <ClipboardList size={32} />
-              </div>
-              <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">No Sales Recorded</p>
+        ) : allRecords.length === 0 ? (
+            <div className="py-24 text-center space-y-3 opacity-20">
+                <SearchX size={48} className="mx-auto text-gray-400" />
+                <p className="text-[10px] font-black uppercase tracking-[0.3em]">No Transactions Found</p>
             </div>
-          ) : (
-            records.map((record, idx) => (
+        ) : (
+          allRecords.map((record) => {
+            // INNER SAFETY CHECK
+            if (!record?.id) return null;
+
+            const isCredit = record.paymentMethod === "CREDIT";
+            const isHardware = record.paymentMethod === "HARDWARE";
+            
+            return (
               <motion.div
+                layout
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 key={record.id}
-                className="bg-white p-5 rounded-[32px] shadow-sm border border-gray-50 flex items-center justify-between active:scale-[0.98] transition-all"
+                className="bg-white p-4 rounded-[28px] shadow-sm border border-gray-50 flex items-center justify-between active:scale-[0.99] transition-transform"
               >
                 <div className="flex items-center gap-4">
                   <div className={cn(
-                    "w-12 h-12 rounded-2xl flex items-center justify-center",
-                    record.source === "device" ? "bg-purple-50 text-purple-500" : "bg-blue-50 text-blue-500"
+                    "w-11 h-11 rounded-[18px] flex items-center justify-center shadow-inner",
+                    isHardware ? "bg-blue-50 text-blue-500" : 
+                    isCredit ? "bg-red-50 text-red-500" : "bg-emerald-50 text-emerald-500"
                   )}>
-                    {record.source === "device" ? <Cpu size={22} /> : <ArrowUpRight size={22} />}
+                    {isHardware ? <Globe size={20} /> : 
+                     isCredit ? <Users size={20} /> : <Wallet size={20} />}
                   </div>
                   <div>
-                    <p className="font-black text-black text-sm tracking-tight">{record.description || "POS Payment"}</p>
-                    <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mt-0.5">{formatDate(record.recordedAt, "h:mm a")} • {record.category}</p>
+                    <p className="font-bold text-black text-[14px] leading-tight tracking-tight">{record.description || "Order Entry"}</p>
+                    <p className="text-[9px] font-black text-gray-300 uppercase tracking-tighter mt-1 flex items-center gap-1">
+                      <Clock size={10} /> {formatDate(record.recordedAt, "MMM d • h:mm a")}
+                    </p>
                   </div>
                 </div>
-                <p className="text-lg font-black text-emerald-500 tracking-tighter">+{formatCurrency(record.amount)}</p>
+
+                <div className="text-right">
+                  <p className={cn(
+                    "text-[15px] font-black tracking-tighter",
+                    isCredit ? "text-red-500" : "text-emerald-500"
+                  )}>
+                    {isCredit ? "— " : "+ "}रू {record.amount?.toLocaleString() ?? "0"}
+                  </p>
+                  
+                  {isCredit && (
+                    <div className="mt-1 flex justify-end">
+                      {record.status === "SETTLED" ? (
+                        <div className="flex items-center gap-1 text-[#34C759]">
+                          <span className="text-[8px] font-black uppercase tracking-tighter">Settled</span>
+                          <CheckCircle2 size={12} strokeWidth={3} />
+                        </div>
+                      ) : (
+                        <button 
+                          onClick={() => setConfirmId(record.id)}
+                          className="bg-red-500 text-white text-[8px] font-black px-3 py-1 rounded-full uppercase active:scale-90 transition-all shadow-md shadow-red-100"
+                        >
+                          Settle Now
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
               </motion.div>
-            ))
-          )}
+            );
+          })
+        )}
+
+        {/* 3. INFINITE SCROLL TARGET */}
+        <div ref={observerElem} className="h-16 flex items-center justify-center">
+            {isFetchingNextPage && (
+                <div className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce" />
+                    <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce [animation-delay:0.2s]" />
+                    <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce [animation-delay:0.4s]" />
+                </div>
+            )}
         </div>
       </main>
 
-      {/* Modal Integration */}
+      {/* 4. SETTLEMENT MODAL */}
       <AnimatePresence>
-        {showModal && (
-          <AddRecordModal
-            isOpen={showModal}
-            onClose={() => setShowModal(false)}
-            onSuccess={() => { setShowModal(false); fetchRecords(); }}
-          />
+        {confirmId && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setConfirmId(null)} className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="relative w-full max-w-[280px] bg-white rounded-[35px] p-8 text-center shadow-2xl border border-gray-100">
+              <div className="w-14 h-14 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                <AlertCircle size={28} />
+              </div>
+              <h3 className="text-lg font-black text-black tracking-tight">Confirm Payment?</h3>
+              <p className="text-[10px] font-bold text-gray-400 mt-2 leading-relaxed px-2 uppercase tracking-widest">
+                This will mark the credit as paid and sync with Haadi Bistro cloud.
+              </p>
+              <div className="flex flex-col gap-2 mt-8">
+                <button 
+                    disabled={mutation.isPending}
+                    onClick={() => mutation.mutate(confirmId)} 
+                    className="w-full py-4 bg-[#007AFF] text-white rounded-[20px] text-xs font-black uppercase tracking-widest shadow-xl shadow-blue-100 active:scale-95 transition-all"
+                >
+                  {mutation.isPending ? "Syncing..." : "Confirm Settlement"}
+                </button>
+                <button onClick={() => setConfirmId(null)} className="w-full py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

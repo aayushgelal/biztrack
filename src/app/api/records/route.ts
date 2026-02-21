@@ -2,50 +2,45 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 
-// GET /api/records — get records with filters
 export async function GET(req: NextRequest) {
-  const session = await getSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  try {
+    const session = await getSession();
+    
+    // 1. Safety Check: If no session, return 401 instead of crashing with 500
+    if (!session || !session.userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  const { searchParams } = new URL(req.url);
-  const page = parseInt(searchParams.get("page") || "1");
-  const limit = parseInt(searchParams.get("limit") || "20");
-  const from = searchParams.get("from");
-  const to = searchParams.get("to");
-  const category = searchParams.get("category");
-  const source = searchParams.get("source");
-  const deviceId = searchParams.get("deviceId");
+    const { searchParams } = new URL(req.url);
+    const type = searchParams.get("type");
+    const page = parseInt(searchParams.get("page") || "1");
+    const limit = 15;
 
-  const where: any = { userId: session.userId };
-  if (from && to) {
-    where.recordedAt = { gte: new Date(from), lte: new Date(to) };
-  }
-  if (category) where.category = category;
-  if (source) where.source = source;
-  if (deviceId) where.deviceId = deviceId;
+    const where: any = { userId: session.userId };
 
-  const [records, total] = await Promise.all([
-    prisma.earningRecord.findMany({
+    // 2. Filter Logic
+    if (type === "online") where.paymentMethod = "HARDWARE";
+    else if (type === "cash") where.paymentMethod = "CASH";
+    else if (type === "credit") where.paymentMethod = "CREDIT";
+
+    // 3. Fetch Records
+    const records = await prisma.earningRecord.findMany({
       where,
       orderBy: { recordedAt: "desc" },
       skip: (page - 1) * limit,
       take: limit,
-      include: { device: { select: { id: true, name: true } } },
-    }),
-    prisma.earningRecord.count({ where }),
-  ]);
+    });
 
-  return NextResponse.json({
-    records,
-    total,
-    page,
-    limit,
-    totalPages: Math.ceil(total / limit),
-  });
+    return NextResponse.json({ 
+      records, 
+      hasMore: records.length === limit,
+      page // return current page for React Query to track
+    });
+  } catch (error) {
+    console.error("Records API Error:", error);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+  }
 }
-
 // GET /api/records/devices — list user devices
 export async function PUT(req: NextRequest) {
   const session = await getSession();
