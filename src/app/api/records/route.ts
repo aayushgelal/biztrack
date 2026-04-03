@@ -11,16 +11,24 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const type = searchParams.get("type");
+    const creditId = searchParams.get("creditId"); // <-- NEW: Get the specific customer ID
     const page = parseInt(searchParams.get("page") || "1");
     const limit = 15;
 
-    // Logic: Staff see records tied to the main Merchant (parentId)
     const targetUserId = session.parentId || session.userId;
     const where: any = { userId: targetUserId };
 
-    if (type === "online") where.paymentMethod = "HARDWARE";
-    else if (type === "cash") where.paymentMethod = "CASH";
-    else if (type === "credit") where.paymentMethod = "CREDIT";
+    // CRITICAL FIX: If a creditId is passed, strictly filter by that customer
+    if (creditId) {
+      where.creditId = creditId;
+      // We also ensure only "CREDIT" entries show up in the ledger
+      where.paymentMethod = "CREDIT"; 
+    } else {
+      // Normal filtering for the general History page
+      if (type === "online") where.paymentMethod = "HARDWARE";
+      else if (type === "cash") where.paymentMethod = "CASH";
+      else if (type === "credit") where.paymentMethod = "CREDIT";
+    }
 
     const records = await prisma.earningRecord.findMany({
       where,
@@ -28,7 +36,7 @@ export async function GET(req: NextRequest) {
       skip: (page - 1) * limit,
       take: limit,
       include: {
-        credit: { select: { customerName: true } } // Show which company took the credit
+        credit: { select: { customerName: true } }
       }
     });
 
@@ -38,6 +46,7 @@ export async function GET(req: NextRequest) {
       page 
     });
   } catch (error) {
+    console.error("Fetch Records Error:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
