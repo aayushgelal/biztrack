@@ -93,7 +93,7 @@ export async function DELETE(req: NextRequest) {
   }
 
   const { searchParams } = new URL(req.url);
-  const id = searchParams.get("id");
+  const id = searchParams.get("id") || undefined;
 
   await prisma.earningRecord.delete({ where: { id } });
   return NextResponse.json({ success: true });
