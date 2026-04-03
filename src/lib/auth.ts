@@ -10,6 +10,8 @@ export interface JWTPayload {
   userId: string;
   username: string;
   businessName: string;
+  parentId?: string;
+  role: string;
 }
 
 export async function hashPassword(password: string): Promise<string> {
@@ -55,6 +57,8 @@ export async function getAuthUser() {
       email: true,
       phone: true,
       createdAt: true,
+      role:true,
+      parentId:true,
       devices: {
         include: {
           subscription: true,

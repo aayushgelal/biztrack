@@ -21,11 +21,16 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  parentId     String?
+  parent       User?    @relation("UserToStaff", fields: [parentId], references: [id])
+  staffMembers User[]   @relation("UserToStaff")
+
   // Relationships
   devices       Device[]
   records       EarningRecord[]
   subscriptions Subscription[]
   credits       Credit[]
+  
 
 }
 
@@ -90,6 +95,7 @@ model Credit {
   records     EarningRecord[] // History of credits and partial payments
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  @@index([customerName]) // For fast sorting by person/company
 }
 
 model Subscription {

@@ -20,6 +20,14 @@ export async function GET(req: NextRequest) {
         id: true,
         username: true,
         businessName: true,
+        staffMembers: {
+          select: {
+            id: true,
+            username: true,
+            password: true,
+            role: true,
+          }
+        },
         devices: {
           select: {
             id: true,
