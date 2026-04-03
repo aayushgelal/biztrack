@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { TrendingUp, Wallet, Globe, Users, RefreshCcw, RefreshCw } from "lucide-react";
+import { TrendingUp, Wallet, Globe, Users, RefreshCcw } from "lucide-react";
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, ReferenceLine, YAxis } from "recharts";
 import { getAnalyticsData } from "@/lib/actions";
 import { cn } from "@/lib/utils";
@@ -22,7 +22,6 @@ export default function AnalyticsPage() {
     staleTime: Infinity,
   });
 
-  // Transform data: Credit to negative for the "Below the Line" visual
   const transformedChartData = useMemo(() => {
     return data?.chartData?.map((item: any) => ({
       ...item,
@@ -30,9 +29,39 @@ export default function AnalyticsPage() {
     })) || [];
   }, [data?.chartData]);
 
+  // --- SKELETON LOADING UI ---
   if (status === "pending" && !data) return (
-    <div className="min-h-screen bg-[#F2F2F7] flex items-center justify-center">
-       <RefreshCw size={28} className="text-emerald-500 animate-spin" />
+    <div className="px-5 pt-10 pb-32 min-h-screen bg-[#F2F2F7] space-y-6 animate-pulse">
+      <header className="flex justify-between items-end px-1">
+        <div className="space-y-2">
+          <div className="h-8 w-32 bg-gray-200 rounded-lg" />
+          <div className="h-3 w-40 bg-gray-200 rounded-md" />
+        </div>
+        <div className="w-10 h-10 rounded-full bg-white shadow-sm" />
+      </header>
+
+      <div className="grid grid-cols-2 gap-3">
+        {[1, 2].map((i) => (
+          <div key={i} className="p-4 bg-white rounded-[22px] shadow-sm space-y-3">
+            <div className="w-8 h-8 rounded-lg bg-gray-100" />
+            <div className="h-3 w-12 bg-gray-100 rounded" />
+            <div className="h-6 w-20 bg-gray-200 rounded-md" />
+          </div>
+        ))}
+      </div>
+
+      <div className="p-5 bg-white rounded-[24px] shadow-sm h-56">
+        <div className="h-4 w-32 bg-gray-100 rounded mb-8" />
+        <div className="h-32 w-full bg-gray-50 rounded-xl" />
+      </div>
+
+      <div className="p-5 bg-white rounded-[24px] shadow-sm h-64">
+        <div className="flex justify-between mb-8">
+           <div className="h-4 w-32 bg-gray-100 rounded" />
+           <div className="h-4 w-16 bg-gray-100 rounded" />
+        </div>
+        <div className="h-40 w-full bg-gray-50 rounded-xl" />
+      </div>
     </div>
   );
 
@@ -42,7 +71,7 @@ export default function AnalyticsPage() {
 
   return (
     <div className="px-5 pt-10 pb-32 min-h-screen bg-[#F2F2F7] space-y-6">
-      {/* 1. BRAND HEADER - Matches Dashboard Exactly */}
+      {/* 1. BRAND HEADER */}
       <header className="flex justify-between items-end px-1">
         <div>
           <h1 className="text-3xl font-black tracking-tighter text-emerald-600 leading-none">Insights</h1>
@@ -58,7 +87,7 @@ export default function AnalyticsPage() {
         </button>
       </header>
 
-      {/* 2. STATS GRID - Uses Dashboard Card Style */}
+      {/* 2. STATS GRID */}
       <div className="grid grid-cols-2 gap-3">
         <div className="p-4 bg-white rounded-[22px] shadow-sm border-none">
           <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600 mb-3">
@@ -154,7 +183,7 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      {/* 5. CREDIT SUMMARY CARD - Compact Footer Style */}
+      {/* 5. CREDIT SUMMARY CARD */}
       <div className="p-5 bg-white rounded-[24px] border-none shadow-sm flex justify-between items-center">
         <div>
           <p className="text-[#8E8E93] text-[9px] font-bold text-gray-400 uppercase tracking-widest">Pending Credit (Udharo)</p>
