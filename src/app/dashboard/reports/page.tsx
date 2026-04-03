@@ -2,11 +2,10 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { ArrowLeft, TrendingUp, Wallet, Globe, Users, Calendar, RefreshCcw } from "lucide-react";
-import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, ReferenceLine } from "recharts";
+import { TrendingUp, Wallet, Globe, Users, RefreshCcw, RefreshCw } from "lucide-react";
+import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, ReferenceLine, YAxis } from "recharts";
 import { getAnalyticsData } from "@/lib/actions";
 import { cn } from "@/lib/utils";
-import Link from "next/link";
 
 export default function AnalyticsPage() {
   const [user, setUser] = useState({ id: "" });
@@ -23,7 +22,7 @@ export default function AnalyticsPage() {
     staleTime: Infinity,
   });
 
-  // Transform data: Credit to negative for "Below the Line"
+  // Transform data: Credit to negative for the "Below the Line" visual
   const transformedChartData = useMemo(() => {
     return data?.chartData?.map((item: any) => ({
       ...item,
@@ -33,7 +32,7 @@ export default function AnalyticsPage() {
 
   if (status === "pending" && !data) return (
     <div className="min-h-screen bg-[#F2F2F7] flex items-center justify-center">
-       <RefreshCcw size={32} className="text-[#34C759] animate-spin" />
+       <RefreshCw size={28} className="text-emerald-500 animate-spin" />
     </div>
   );
 
@@ -42,105 +41,127 @@ export default function AnalyticsPage() {
   const creditTotal = data?.totals?.credit ?? 0;
 
   return (
-    <div className="px-6 pt-12 pb-32 min-h-screen bg-[#F2F2F7] space-y-6">
-      <header className="flex justify-between items-center">
-        <div className="flex items-center gap-4">
-          <Link href="/dashboard" className="p-2 bg-white rounded-full shadow-sm active:scale-90 transition-transform">
-            <ArrowLeft size={20} />
-          </Link>
-          <h1 className="text-3xl font-black tracking-tighter">Insights</h1>
+    <div className="px-5 pt-10 pb-32 min-h-screen bg-[#F2F2F7] space-y-6">
+      {/* 1. BRAND HEADER - Matches Dashboard Exactly */}
+      <header className="flex justify-between items-end px-1">
+        <div>
+          <h1 className="text-3xl font-black tracking-tighter text-emerald-600 leading-none">Insights</h1>
+          <p className="text-[9px] font-bold text-[#8E8E93] uppercase tracking-[0.12em] mt-1.5">
+            Performance • Statistics
+          </p>
         </div>
         <button 
-          onClick={() => refetch()}
-          className={cn("p-2 rounded-full transition-all", isFetching && "animate-spin text-[#34C759]")}
+          onClick={() => refetch()} 
+          className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center active:scale-90 transition-transform"
         >
-          <RefreshCcw size={20} className="text-gray-400" />
+          <RefreshCcw size={18} className={cn("text-black", isFetching && "animate-spin text-emerald-500")} />
         </button>
       </header>
 
-      {/* 1. STATS GRID */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="ios-card bg-white p-5 border-none shadow-sm">
-          <Wallet className="text-[#34C759] mb-2" size={22} />
-          <p className="text-[10px] font-black text-gray-400 uppercase tracking-tighter">Total Cash</p>
-          <p className="text-xl font-black text-black">रू {cashTotal.toLocaleString()}</p>
+      {/* 2. STATS GRID - Uses Dashboard Card Style */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="p-4 bg-white rounded-[22px] shadow-sm border-none">
+          <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600 mb-3">
+            <Wallet size={16} />
+          </div>
+          <p className="text-[#8E8E93] text-[9px] font-bold uppercase tracking-wider">Cash Total</p>
+          <p className="text-lg font-black text-black leading-tight">रू {cashTotal.toLocaleString()}</p>
         </div>
-        <div className="ios-card bg-white p-5 border-none shadow-sm">
-          <Globe className="text-[#34C759] mb-2" size={22} />
-          <p className="text-[10px] font-black text-gray-400 uppercase tracking-tighter">Online</p>
-          <p className="text-xl font-black text-black">रू {onlineTotal.toLocaleString()}</p>
+        <div className="p-4 bg-white rounded-[22px] shadow-sm border-none">
+          <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600 mb-3">
+            <Globe size={16} />
+          </div>
+          <p className="text-[#8E8E93] text-[9px] font-bold uppercase tracking-wider">Online Total</p>
+          <p className="text-lg font-black text-black leading-tight">रू {onlineTotal.toLocaleString()}</p>
         </div>
       </div>
 
-      {/* 2. GROWTH TREND */}
-      <div className="ios-card bg-white p-6 shadow-sm border-none">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-2 text-[#34C759]">
-            <TrendingUp size={16} />
-            <h3 className="text-xs font-black uppercase tracking-widest text-black">Monthly Revenue</h3>
-          </div>
+      {/* 3. GROWTH TREND (Line Chart) */}
+      <motion.div 
+        initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}
+        className="p-5 bg-white rounded-[24px] shadow-sm border-none"
+      >
+        <div className="flex items-center gap-2 mb-6">
+          <TrendingUp size={14} className="text-emerald-500" />
+          <h3 className="text-[10px] font-black text-black uppercase tracking-widest">Revenue Growth</h3>
         </div>
-        <div className="h-48 w-full">
+        <div className="h-40 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={data?.monthlyTrend ?? []}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F2F2F7" />
-              <XAxis dataKey="month" fontSize={10} fontWeight="bold" axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ borderRadius: '15px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }} />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F9F9FB" />
+              <XAxis 
+                dataKey="month" 
+                fontSize={9} 
+                fontWeight="900" 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{fill: '#8E8E93'}}
+              />
+              <Tooltip 
+                contentStyle={{ borderRadius: '12px', border: 'none', fontSize: '11px', fontWeight: 'bold', boxShadow: '0 8px 20px rgba(0,0,0,0.05)' }} 
+                itemStyle={{ color: '#10B981' }}
+              />
               <Line 
                 type="monotone" 
                 dataKey="total" 
-                stroke="#34C759" 
-                strokeWidth={4} 
-                dot={{ r: 4, fill: '#34C759', strokeWidth: 2, stroke: '#fff' }} 
+                stroke="#10B981" 
+                strokeWidth={3} 
+                dot={{ r: 3, fill: '#10B981', strokeWidth: 2, stroke: '#fff' }} 
               />
             </LineChart>
           </ResponsiveContainer>
         </div>
-      </div>
+      </motion.div>
 
-      {/* 3. DAILY BREAKDOWN (UNIFIED GREEN) */}
-      <div className="ios-card bg-white p-6 shadow-sm border-none">
-        <h3 className="text-xs font-black uppercase tracking-widest mb-6 text-black">Daily Breakdown</h3>
-        <div className="h-64 w-full">
+      {/* 4. DAILY BREAKDOWN (Stack Bar Chart) */}
+      <div className="p-5 bg-white rounded-[24px] shadow-sm border-none">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-[10px] font-black text-black uppercase tracking-widest">Daily Breakdown</h3>
+          <div className="flex gap-3">
+            <div className="flex items-center gap-1">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              <span className="text-[8px] font-bold text-gray-400 uppercase">Paid</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-1.5 h-1.5 rounded-full bg-red-400" />
+              <span className="text-[8px] font-bold text-gray-400 uppercase">Credit</span>
+            </div>
+          </div>
+        </div>
+        <div className="h-52 w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={transformedChartData} stackOffset="sign">
-              <XAxis dataKey="name" fontSize={9} fontWeight="bold" axisLine={false} tickLine={false} />
+            <BarChart data={transformedChartData} stackOffset="sign" margin={{ left: -20 }}>
+              <XAxis 
+                dataKey="name" 
+                fontSize={8} 
+                fontWeight="900" 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{fill: '#8E8E93'}}
+              />
+              <YAxis hide />
               <Tooltip 
-                contentStyle={{ borderRadius: '15px', border: 'none' }} 
-                cursor={{fill: '#F2F2F7'}} 
+                cursor={{fill: '#F2F2F7', opacity: 0.4}} 
+                contentStyle={{ borderRadius: '12px', border: 'none', fontSize: '11px' }}
                 formatter={(value: number) => Math.abs(value).toLocaleString()} 
               />
-              <ReferenceLine y={0} stroke="#E5E5EA" /> 
-              
-              {/* UNIFIED GREEN INCOME STACK */}
-              <Bar dataKey="online" name="Online" stackId="a" fill="#34C759" />
-              <Bar dataKey="cash" name="Cash" stackId="a" fill="#34C759" radius={[4, 4, 0, 0]} />
-              
-              {/* RED DEBT BELOW LINE */}
-              <Bar dataKey="credit" name="Credit" stackId="a" fill="#FF3B30" radius={[0, 0, 4, 4]} />
+              <ReferenceLine y={0} stroke="#F2F2F7" /> 
+              <Bar dataKey="online" stackId="a" fill="#10B981" radius={[2, 2, 0, 0]} />
+              <Bar dataKey="cash" stackId="a" fill="#10B981" />
+              <Bar dataKey="credit" stackId="a" fill="#F87171" radius={[0, 0, 2, 2]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
-        <div className="flex justify-center gap-6 mt-4">
-            <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 rounded-full bg-[#34C759]"/> 
-              <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter">Income (Cash/Online)</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 rounded-full bg-[#FF3B30]"/> 
-              <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter">Pending Credit</span>
-            </div>
-        </div>
       </div>
 
-      {/* 4. CREDIT SUMMARY CARD */}
-      <div className="ios-card bg-white p-6 border-none shadow-sm flex justify-between items-center">
+      {/* 5. CREDIT SUMMARY CARD - Compact Footer Style */}
+      <div className="p-5 bg-white rounded-[24px] border-none shadow-sm flex justify-between items-center">
         <div>
-          <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Total Credit (Udharo)</p>
-          <p className="text-3xl font-black mt-1 text-[#FF3B30]">रू {creditTotal.toLocaleString()}</p>
+          <p className="text-[#8E8E93] text-[9px] font-bold text-gray-400 uppercase tracking-widest">Pending Credit (Udharo)</p>
+          <p className="text-3xl font-black mt-0.5 text-red-500 tracking-tighter">रू {creditTotal.toLocaleString()}</p>
         </div>
-        <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center text-[#FF3B30]">
-           <Users size={24} />
+        <div className="w-11 h-11 bg-red-50 rounded-2xl flex items-center justify-center text-red-500">
+           <Users size={20} />
         </div>
       </div>
     </div>

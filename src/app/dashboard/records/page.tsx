@@ -19,7 +19,6 @@ export default function RecordsPage() {
   } = useInfiniteQuery({
     queryKey: ["ledger-records", filter],
     queryFn: async ({ pageParam = 1 }) => {
-      // Filter out credit from this view or keep it as read-only
       const res = await fetch(`/api/records?type=${filter}&page=${pageParam}`);
       if (!res.ok) throw new Error("Failed to fetch ledger");
       return res.json();
@@ -47,28 +46,32 @@ export default function RecordsPage() {
 
   return (
     <div className="min-h-screen bg-[#F2F2F7] pb-32">
-      <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-gray-100 px-6 pt-12 pb-5">
-        <div className="flex justify-between items-center mb-5">
+      {/* 1. HEADER - Synced with Home Dashboard */}
+      <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-gray-100 px-5 pt-10 pb-5">
+        <div className="flex justify-between items-end px-1 mb-5">
           <div>
-            <h1 className="text-xl font-black text-black tracking-tighter">History</h1>
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Cash & Digital Logs</p>
+            <h1 className="text-3xl font-black tracking-tighter text-emerald-600 leading-none">History</h1>
+            <p className="text-[9px] font-bold text-[#8E8E93] uppercase tracking-[0.12em] mt-1.5">
+              Cash & Digital Logs
+            </p>
           </div>
           <button 
             onClick={() => refetch()} 
-            className="p-2.5 rounded-full bg-white shadow-sm border border-gray-100 active:scale-90"
+            className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center active:scale-90 transition-transform"
           >
-            <RefreshCcw size={18} className={cn(isFetching && "animate-spin")} />
+            <RefreshCcw size={18} className={cn("text-black", isFetching && "animate-spin text-emerald-500")} />
           </button>
         </div>
         
-        <div className="grid grid-cols-3 gap-1.5 p-1 bg-gray-100/50 rounded-2xl">
+        {/* 2. FILTER SEGMENT - Emerald Theme */}
+        <div className="grid grid-cols-3 gap-1 p-1 bg-gray-100/50 rounded-[18px]">
           {["all", "online", "cash"].map((t) => (
             <button
               key={t}
               onClick={() => setFilter(t)}
               className={cn(
-                "py-2.5 rounded-xl text-[10px] font-black transition-all uppercase tracking-tighter",
-                filter === t ? "bg-[#007AFF] text-white shadow-md" : "text-gray-400"
+                "py-2 rounded-[14px] text-[10px] font-bold transition-all uppercase tracking-tight",
+                filter === t ? "bg-emerald-500 text-white shadow-sm" : "text-gray-400"
               )}
             >
               {t === "online" ? "Digital" : t}
@@ -77,39 +80,47 @@ export default function RecordsPage() {
         </div>
       </header>
 
-      <main className="px-5 mt-6 space-y-2.5">
+      {/* 3. MAIN CONTENT */}
+      <main className="px-5 mt-6 space-y-2">
         {status === "pending" ? (
-          <div className="py-20 flex flex-col items-center">
-             <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <div className="py-20 flex justify-center">
+             <RefreshCcw size={24} className="text-emerald-500 animate-spin" />
           </div>
         ) : allRecords.length === 0 ? (
-            <div className="py-24 text-center opacity-20">
-                <SearchX size={48} className="mx-auto" />
-                <p className="text-[10px] font-black uppercase tracking-widest">No Records</p>
+            <div className="py-24 text-center opacity-20 flex flex-col items-center">
+                <SearchX size={40} className="mb-2" />
+                <p className="text-[10px] font-black uppercase tracking-widest">No Records Found</p>
             </div>
         ) : (
           allRecords.map((record) => (
             <motion.div
               layout
               key={record.id}
-              className="bg-white p-4 rounded-[28px] shadow-sm flex items-center justify-between"
+              className="bg-white p-3.5 rounded-[22px] shadow-sm flex items-center justify-between"
             >
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3">
                 <div className={cn(
-                  "w-11 h-11 rounded-[18px] flex items-center justify-center",
-                  record.paymentMethod === "HARDWARE" ? "bg-blue-50 text-blue-500" : "bg-emerald-50 text-emerald-500"
+                  "w-9 h-9 rounded-full flex items-center justify-center",
+                  "bg-emerald-50 text-emerald-600"
                 )}>
-                  {record.paymentMethod === "HARDWARE" ? <Globe size={20} /> : <Wallet size={20} />}
+                  {record.paymentMethod === "online" || record.paymentMethod === "HARDWARE" 
+                    ? <Globe size={16} /> 
+                    : <Wallet size={16} />
+                  }
                 </div>
                 <div>
-                  <p className="font-bold text-black text-[14px] leading-tight">{record.description || "Order Entry"}</p>
-                  <p className="text-[9px] font-black text-gray-300 uppercase mt-1 flex items-center gap-1">
+                  {/* Title font size and weight matched to activity feed */}
+                  <p className="text-[13px] font-semibold text-black leading-tight">
+                    {record.description || "Order Entry"}
+                  </p>
+                  <p className="text-[10px] text-gray-400 font-medium mt-0.5 tracking-tight flex items-center gap-1">
                     <Clock size={10} /> {formatDate(record.recordedAt, "MMM d • h:mm a")}
                   </p>
                 </div>
               </div>
-              <p className="text-[15px] font-black text-emerald-500 tracking-tighter">
-                + रू {record.amount?.toLocaleString()}
+              {/* Removed + symbol, kept color and font weight as requested */}
+              <p className="text-[15px] font-bold text-emerald-500 tracking-tight">
+                रू {record.amount?.toLocaleString()}
               </p>
             </motion.div>
           ))
