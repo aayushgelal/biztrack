@@ -60,29 +60,30 @@ model Device {
   subscription Subscription?
 }
 model EarningRecord {
-  id          String   @id @default(cuid())
-  amount      Float
-  currency    String   @default("NPR")
-  description String?  // This serves as your "Remarks" - User can edit this
-  category    String   @default("Sales")
-  status      String   @default("SUCCESS")
-  prn         String?  @unique // Nullable now, as Cash/Manual won't have a PRN
+  id            String   @id @default(cuid())
+  amount        Float
+  currency      String   @default("NPR")
+  description   String?  
+  category      String   @default("Sales")
+  status        String   @default("SUCCESS")
+  prn           String?  @unique 
   
-  // New Fields
-  paymentMethod String   @default("HARDWARE") // HARDWARE | CASH | CREDIT
-  source        String   @default("device")   // device | app
+  paymentMethod String   @default("HARDWARE") 
+  source        String   @default("device")   
   
-  recordedAt  DateTime @default(now())
-  createdAt   DateTime @default(now())
+  // ADD THIS LINE
+  creditDirection String? // For values like "LINA" or "DINA"
+  
+  recordedAt    DateTime @default(now())
+  createdAt     DateTime @default(now())
 
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  deviceId    String?
-  device      Device?  @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceId      String?
+  device        Device?  @relation(fields: [deviceId], references: [id], onDelete: SetNull)
   
-  // Relation to Credit if this was a credit payment/settlement
-  creditId    String?
-  credit      Credit?  @relation(fields: [creditId], references: [id])
+  creditId      String?
+  credit        Credit?  @relation(fields: [creditId], references: [id])
 }
 
 model Credit {
