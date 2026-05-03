@@ -97,3 +97,35 @@ export async function getTodayDashboardData(userId: string) {
     }))
   };
 }
+
+
+
+export async function getInventoryData(userId: string) {
+  if (!userId) return null;
+
+  const [items, movements] = await Promise.all([
+    prisma.inventoryItem.findMany({
+      where: { userId, isActive: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.stockMovement.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      include: { item: { select: { name: true, unit: true } } },
+    }),
+  ]);
+
+  const lowStockItems = items.filter((i) => i.currentStock <= i.minStock);
+  const totalInventoryValue = items.reduce((acc, i) => acc + i.currentStock * i.costPrice, 0);
+  const categories = [...new Set(items.map((i) => i.category))];
+
+  return {
+    items,
+    recentMovements: movements,
+    lowStockItems,
+    totalInventoryValue,
+    categories,
+    totalItems: items.length,
+  };
+}

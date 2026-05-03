@@ -54,42 +54,47 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+ 
   try {
-    const { amount, description, paymentMethod, creditId, deviceId } = await req.json();
-    
-    // Transactions are always owned by the main Merchant account
+    const { amount, description, paymentMethod, creditId, creditDirection, deviceId } = await req.json();
     const ownerId = session.parentId || session.userId;
-
+ 
     const record = await prisma.$transaction(async (tx) => {
-      // 1. Create the record
       const newRecord = await tx.earningRecord.create({
         data: {
           amount,
           description,
           paymentMethod,
+          creditDirection: paymentMethod === "CREDIT" ? (creditDirection ?? "LINA") : null,
           userId: ownerId,
-          deviceId,
+          deviceId: deviceId ?? null,
           creditId: paymentMethod === "CREDIT" ? creditId : null,
         },
       });
-
-      // 2. Update Company Credit Balance automatically
+ 
+      // Update the correct balance bucket on the Credit profile
       if (paymentMethod === "CREDIT" && creditId) {
+        const direction = creditDirection ?? "LINA";
+ 
         await tx.credit.update({
           where: { id: creditId },
           data: {
-            totalAmount: { increment: amount },
+            // linaAmount: money we will RECEIVE (green)
+            // dinaAmount: money we will GIVE (red)
+            ...(direction === "LINA"
+              ? { linaAmount: { increment: amount }, totalAmount: { increment: amount } }
+              : { dinaAmount: { increment: amount }, totalAmount: { decrement: amount } }),
             status: "PENDING",
           },
         });
       }
-
+ 
       return newRecord;
     });
-
+ 
     return NextResponse.json(record, { status: 201 });
   } catch (error) {
+    console.error(error);
     return NextResponse.json({ error: "Transaction failed" }, { status: 500 });
   }
 }
