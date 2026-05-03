@@ -118,8 +118,7 @@ export async function getInventoryData(userId: string) {
 
   const lowStockItems = items.filter((i) => i.currentStock <= i.minStock);
   const totalInventoryValue = items.reduce((acc, i) => acc + i.currentStock * i.costPrice, 0);
-  const categories = [...new Set(items.map((i) => i.category))];
-
+  const categories = Array.from(new Set(items.map((i) => i.category)));
   return {
     items,
     recentMovements: movements,
