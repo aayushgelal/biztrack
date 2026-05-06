@@ -1,4 +1,3 @@
-// app/api/credits/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
@@ -22,13 +21,15 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    const { customerName, customerPhone } = await req.json();
+    // Extracting direction along with name and phone
+    const { customerName, customerPhone, direction } = await req.json();
     const ownerId = session.parentId || session.userId;
 
     const company = await prisma.credit.create({
       data: {
         customerName,
         customerPhone,
+        direction: direction || "LINA", // Defaults to LINA if not provided
         userId: ownerId,
       },
     });
