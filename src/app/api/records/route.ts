@@ -11,17 +11,16 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const type = searchParams.get("type");
-    const creditId = searchParams.get("creditId"); // <-- NEW: Get the specific customer ID
+    const creditId = searchParams.get("creditId"); // Get the specific customer ID
     const page = parseInt(searchParams.get("page") || "1");
     const limit = 15;
 
     const targetUserId = session.parentId || session.userId;
     const where: any = { userId: targetUserId };
 
-    // CRITICAL FIX: If a creditId is passed, strictly filter by that customer
+    // STRICT filter by creditId if provided
     if (creditId) {
       where.creditId = creditId;
-      // We also ensure only "CREDIT" entries show up in the ledger
       where.paymentMethod = "CREDIT"; 
     } else {
       // Normal filtering for the general History page
@@ -54,12 +53,13 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
- 
+
   try {
     const { amount, description, paymentMethod, creditId, creditDirection, deviceId } = await req.json();
     const ownerId = session.parentId || session.userId;
- 
+
     const record = await prisma.$transaction(async (tx) => {
+      // 1. Create the new ledger entry
       const newRecord = await tx.earningRecord.create({
         data: {
           amount,
@@ -71,27 +71,23 @@ export async function POST(req: NextRequest) {
           creditId: paymentMethod === "CREDIT" ? creditId : null,
         },
       });
- 
-      // Update the correct balance bucket on the Credit profile
+
+      // 2. Update the total balance on the Credit profile
       if (paymentMethod === "CREDIT" && creditId) {
-        const direction = creditDirection ?? "LINA";
- 
         await tx.credit.update({
           where: { id: creditId },
           data: {
-            // linaAmount: money we will RECEIVE (green)
-            // dinaAmount: money we will GIVE (red)
-            ...(direction === "LINA"
-              ? { linaAmount: { increment: amount }, totalAmount: { increment: amount } }
-              : { dinaAmount: { increment: amount }, totalAmount: { decrement: amount } }),
+            // Since the account's direction (Lina/Dina) is fixed, adding a new record 
+            // simply increments the total outstanding balance of that account.
+            totalAmount: { increment: amount },
             status: "PENDING",
           },
         });
       }
- 
+
       return newRecord;
     });
- 
+
     return NextResponse.json(record, { status: 201 });
   } catch (error) {
     console.error(error);
