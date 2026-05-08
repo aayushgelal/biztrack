@@ -14,6 +14,7 @@ model User {
   password       String
   businessName   String
   email          String?
+  passwordResets PasswordReset[]
   phone          String?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
@@ -27,6 +28,17 @@ model User {
   subscriptions  Subscription[]
   parent         User?           @relation("UserToStaff", fields: [parentId], references: [id])
   staffMembers   User[]          @relation("UserToStaff")
+}
+
+
+model PasswordReset {
+  id        String   @id @default(cuid())
+  userId    String
+  otp       String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Device {
