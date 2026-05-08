@@ -13,13 +13,13 @@ const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
     user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD, // Gmail App Password (not your real password)
+    pass: process.env.GMAIL_APP_PASSWORD, 
   },
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-const genOTP  = () => Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit
-const OTP_TTL = 10 * 60 * 1000; // 10 minutes in ms
+const genOTP  = () => Math.floor(100000 + Math.random() * 900000).toString(); 
+const OTP_TTL = 10 * 60 * 1000; 
 
 async function sendOTPEmail(to: string, otp: string, businessName?: string | null) {
   await transporter.sendMail({
@@ -71,9 +71,11 @@ export async function POST(req: NextRequest) {
 
     // ── 1. REQUEST OTP ─────────────────────────────────────────────────────
     if (action === "resetPassword") {
-      const { identifier } = body; // username or email
+      // Look for either 'email' (new frontend) or 'identifier' (old frontend)
+      const identifier = body.email || body.identifier; 
+      
       if (!identifier) {
-        return NextResponse.json({ error: "Username or email required" }, { status: 400 });
+        return NextResponse.json({ error: "Email required" }, { status: 400 });
       }
 
       const user = await prisma.user.findFirst({
@@ -85,12 +87,10 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // Always return success to prevent user enumeration
       if (!user?.email) {
         return NextResponse.json({ success: true });
       }
 
-      // Invalidate any existing unused OTPs for this user
       await prisma.passwordReset.updateMany({
         where: { userId: user.id, used: false },
         data: { used: true },
@@ -111,14 +111,17 @@ export async function POST(req: NextRequest) {
 
     // ── 2. VERIFY OTP ──────────────────────────────────────────────────────
     if (action === "verifyOTP") {
-      const { identifier, otp } = body;
+      const identifier = body.email || body.identifier;
+      const { otp } = body;
+      
       if (!identifier || !otp) {
-        return NextResponse.json({ error: "Identifier and OTP required" }, { status: 400 });
+        return NextResponse.json({ error: "Email and OTP required" }, { status: 400 });
       }
 
       const user = await prisma.user.findFirst({
         where: { OR: [{ username: identifier }, { email: identifier }] },
       });
+      
       if (!user) {
         return NextResponse.json({ error: "Invalid OTP" }, { status: 400 });
       }
@@ -131,11 +134,11 @@ export async function POST(req: NextRequest) {
           expiresAt: { gt: new Date() },
         },
       });
+      
       if (!record) {
         return NextResponse.json({ error: "Invalid or expired OTP" }, { status: 400 });
       }
 
-      // Mark OTP as used only after new password is set — return a short-lived token
       return NextResponse.json({ success: true, resetToken: record.id });
     }
 
@@ -158,7 +161,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Reset session expired. Please try again." }, { status: 400 });
       }
 
-      // Update password + invalidate token atomically
       await prisma.$transaction([
         prisma.user.update({
           where: { id: record.userId },
@@ -175,28 +177,36 @@ export async function POST(req: NextRequest) {
 
     // ── 4. REGISTER ────────────────────────────────────────────────────────
     if (action === "register") {
-      const { username, password, businessName, email } = body;
-      if (!username || !password) {
-        return NextResponse.json({ error: "Required fields missing" }, { status: 400 });
+      // Map frontend 'email' to 'username' to satisfy your Prisma schema's likely requirements
+      const { password, businessName } = body;
+      const email = body.email || body.username; 
+      
+      if (!email || !password) {
+        return NextResponse.json({ error: "Email and password required" }, { status: 400 });
       }
       if (!businessName) {
         return NextResponse.json({ error: "Business name required" }, { status: 400 });
       }
 
-      const existing = await prisma.user.findUnique({ where: { username } });
+      const existing = await prisma.user.findFirst({ 
+        where: { OR: [{ username: email }, { email: email }] } 
+      });
+      
       if (existing) {
-        return NextResponse.json({ error: "Username taken" }, { status: 409 });
+        return NextResponse.json({ error: "Email already registered" }, { status: 409 });
       }
 
       const hashedPassword = await hashPassword(password);
 
       const user = await prisma.user.create({
         data: {
-          username,
+          // Saving email as both username and email to prevent Prisma errors 
+          // if username is a required @unique field in your schema
+          username: email, 
+          email: email,    
           password: hashedPassword,
           businessName,
           role: "MERCHANT",
-          ...(email ? { email } : {}),
         },
       });
 
@@ -225,7 +235,7 @@ export async function POST(req: NextRequest) {
 
       const token = generateToken({
         userId: user.id,
-        username,
+        username: user.username,
         businessName,
         role: "MERCHANT",
         parentId: undefined,
@@ -234,48 +244,57 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        user: { id: user.id, username, businessName, role: "MERCHANT" },
+        user: { id: user.id, email: user.email, businessName, role: "MERCHANT" },
       });
     }
 
     // ── 5. LOGIN ───────────────────────────────────────────────────────────
-    const { username, password } = body;
-    if (!username || !password) {
-      return NextResponse.json({ error: "Required fields missing" }, { status: 400 });
-    }
+    if (action === "login") {
+      const { password } = body;
+      const loginEmail = body.email || body.username;
 
-    const user = await prisma.user.findUnique({
-      where: { username },
-      include: { parent: true },
-    });
+      if (!loginEmail || !password) {
+        return NextResponse.json({ error: "Email and password required" }, { status: 400 });
+      }
 
-    if (!user || !(await verifyPassword(password, user.password))) {
-      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
-    }
+      const user = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { username: loginEmail },
+            { email: loginEmail },
+          ],
+        },
+        include: { parent: true },
+      });
 
-    const effectiveBusinessName =
-      user.role === "STAFF"
-        ? user.parent?.businessName || "Staff Account"
-        : user.businessName;
+      if (!user || !(await verifyPassword(password, user.password))) {
+        return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+      }
 
-    const token = generateToken({
-      userId: user.id,
-      username: user.username,
-      businessName: effectiveBusinessName,
-      role: user.role,
-      parentId: user.parentId || undefined,
-    });
-    setAuthCookie(token);
+      const effectiveBusinessName =
+        user.role === "STAFF"
+          ? user.parent?.businessName || "Staff Account"
+          : user.businessName;
 
-    return NextResponse.json({
-      success: true,
-      user: {
-        id: user.id,
+      const token = generateToken({
+        userId: user.id,
         username: user.username,
         businessName: effectiveBusinessName,
         role: user.role,
-      },
-    });
+        parentId: user.parentId || undefined,
+      });
+      setAuthCookie(token);
+
+      return NextResponse.json({
+        success: true,
+        user: {
+          id: user.id,
+          email: user.email,
+          businessName: effectiveBusinessName,
+          role: user.role,
+        },
+      });
+    }
 
   } catch (error) {
     console.error("Auth Error:", error);
